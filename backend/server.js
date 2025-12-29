@@ -4,6 +4,7 @@ const socketIo = require("socket.io");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 
+// Initialize database
 require("./database");
 
 const app = express();
@@ -15,13 +16,17 @@ const io = socketIo(server, {
   },
 });
 
+// Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static("public"));
 
+// Routes
+app.use("/api/auth", require("./routes/auth").router);
 app.use("/api/items", require("./routes/items"));
 app.use("/api/bids", require("./routes/bids"));
 
+// Socket.io for real-time updates
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
@@ -40,11 +45,23 @@ io.on("connection", (socket) => {
   });
 });
 
+// Make io available to routes
 app.set("io", io);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// Close expired auctions every minute
+setInterval(() => {
+  const db = require("./database");
+  db.run(
+    `UPDATE items SET status = 'ended' WHERE end_time <= datetime('now') AND status = 'active'`,
+    (err) => {
+      if (err) console.error("Error closing expired auctions:", err);
+    }
+  );
+}, 60000);
 
 module.exports = { app, io };
